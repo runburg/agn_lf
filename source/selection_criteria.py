@@ -49,7 +49,7 @@ def select_ir(data_table, flux3_6, flux4_5, flux5_8, flux8_0, selection_cuts='la
     lf58_36 = np.log10(flux5_8 / flux3_6)
 
     if selection_cuts == 'lacy05':
-        agn_candidates = (lf80_45 > -0.2) & (lf58_36 > -0.2) & (lf80_45 < (1.4 * lf58_36 - 0.3))
+        agn_candidates = (lf80_45 > -0.2) & (lf58_36 > -0.1) & (lf80_45 < (0.8 * lf58_36 + 0.5))
     elif selection_cuts == 'stern05':
         pass
     elif selection_cuts == 'donley12':

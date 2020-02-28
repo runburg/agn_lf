@@ -33,7 +33,6 @@ def double_power_law(params, m):
             - alpha: Faint-end slope
             - beta: Near-end slope
 
-
     Returns:
         - Value of luminosity function
     """

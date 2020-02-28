@@ -25,7 +25,7 @@ import matplotlib.pyplot as plt
 from astropy.io import fits
 from astropy import cosmology, constants
 from astropy import units as u
-from scipy.optimize import newton
+# from scipy.optimize import newton
 import numpy as np
 from scipy.integrate import quad
 from source.astro_functions import compute_z_from_mag, setup_cosmology

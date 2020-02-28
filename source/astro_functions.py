@@ -49,7 +49,7 @@ def compute_mag_abs(z, mag_app, cosmo, k_correction=K_correction_func):
         - k_correction: function of z calculating the k-correction
     """
     # Eq form given in Eales 93 after eq (2)
-    return mag_app - 5*np.log10(cosmo.luminosity_distance(z).to(u.pc).value/10) - k_correction(z)
+    return mag_app - 5 * np.log10(cosmo.luminosity_distance(z).to(u.pc).value / 10) - k_correction(z)
 
 
 def compute_z_func(z, mag_abs, mag_app, cosmo):

@@ -69,7 +69,7 @@ def plot_wedge(data_table, flux3_6, flux4_5, flux5_8, flux8_0, selection=[]):
     """Create a wedge plot for visualizing selected objects.
 
     Make a color-color plot for selection AGN.
-    Code from Mark Lacy, February 2020. 
+    Code from Mark Lacy, February 2020. Adapted.
 
     Inputs:
         - data_table: Table containing objects for selecting

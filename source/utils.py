@@ -61,7 +61,36 @@ def trim_axes(axes, N):
     return [axes]
 
 
-def plot_setup(rows, cols, d=0, buffer=(0.4, 0.4)):
+def configure_plot_params(fontsize=20, spacing=0.2):
+    """Make plots look the way I want."""
+    mpl.rc('font', **{'family': 'serif', 'serif': ['cmr10'], 'weight': 'light'})
+    mpl.rc('text', usetex=True)
+    mpl.rc('text.latex', preamble=r'\usepackage{amsmath, graphicx}')
+    mpl.rcParams['mathtext.fontset'] = 'cm'
+    # mpl.rcParams['font.serif'] = 'Computer Modern Roman'
+    mpl.rcParams["font.family"] = "serif"
+    # mpl.rcParams['font.size'] = fontsize
+    # mpl.rcParams['mathtext.fontset'] = 'cm'
+    # mpl.rcParams['axes.labelsize'] = 'xx-large'
+    # mpl.rcParams['axes.titlesize'] = 'xx-large'
+
+    mpl.rcParams['figure.subplot.wspace'] = spacing
+    mpl.rcParams['figure.subplot.hspace'] = spacing
+
+    # mpl.rcParams['xtick.labelsize'] = 'xx-large'
+    mpl.rcParams['xtick.major.size'] = 7.5
+    mpl.rcParams['xtick.major.width'] = 1
+    mpl.rcParams['xtick.minor.size'] = 3.75
+    mpl.rcParams['xtick.minor.width'] = 0.5
+
+    # mpl.rcParams['ytick.labelsize'] = 'xx-large'
+    mpl.rcParams['ytick.major.size'] = 7.5
+    mpl.rcParams['ytick.major.width'] = 1
+    mpl.rcParams['ytick.minor.size'] = 3.75
+    mpl.rcParams['ytick.minor.width'] = 0.5
+
+
+def plot_setup(rows, cols, d=0, buffer=(0.4, 0.4), set_global_params=False):
     """Set mpl parameters for beautification.
 
     Make matplotlib pretty again!
@@ -79,14 +108,8 @@ def plot_setup(rows, cols, d=0, buffer=(0.4, 0.4)):
     # setup plot
     plt.close('all')
 
-    # Format label sizes
-    mpl.rcParams['axes.labelsize'] = 'xx-large'
-    mpl.rcParams['ytick.labelsize'] = 'x-large'
-    mpl.rcParams['xtick.labelsize'] = 'x-large'
-
-    # Choose font
-    plt.rc('text', usetex=True)
-    plt.rc('font', family='serif')
+    if set_global_params is True:
+        configure_plot_params(spacing=0)
 
     # Create figure
     figsize = (5 * cols + buffer[0], 3.5 * rows + buffer[1])
@@ -97,6 +120,3 @@ def plot_setup(rows, cols, d=0, buffer=(0.4, 0.4)):
         axs = trim_axes(axs, d)
 
     return fig, axs
-
-
-

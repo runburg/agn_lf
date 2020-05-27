@@ -9,6 +9,7 @@ Description: Helpful funcs
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+from astropy.io import fits
 
 
 def colorbar_for_subplot(fig, axs, cmap, image):
@@ -120,3 +121,14 @@ def plot_setup(rows, cols, d=0, buffer=(0.4, 0.4), set_global_params=False):
         axs = trim_axes(axs, d)
 
     return fig, axs
+
+
+def load_wcs(path, which_hdu=0):
+    """Load and return wcs and hdu."""
+    from astropy.wcs import WCS
+
+    hdu = fits.open(path)[which_hdu]
+    wcs = WCS(hdu.header)
+    print(wcs)
+
+    return wcs, hdu

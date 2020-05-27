@@ -16,6 +16,7 @@ from astropy import units as u
 from scipy.integrate import dblquad
 from source.astro_functions import compute_z_from_mag, setup_cosmology
 import source.utils as utils
+from scipy.interpolate import interp1d
 
 
 def calc_v_max(z_min, z_max, l_min, l_max, coverage, cosmo, use_dblquad=True):
@@ -142,6 +143,29 @@ def coverage_correction(full_fluxes, selected_fluxes):
     return(interp1d(bin_centers, corrections, fill_value='extrapolate'))
 
 
+def coverage_function(data, wcs, xlength, ylength, detector_area, photon_energy):
+    """Calculate the coverage as a function of flux."""
+
+    x = np.arange(xlength)
+    y = np.arange(ylength)
+    X, Y = np.meshgrid(x, y)
+    ra, dec = wcs.wcs_pix2world(X, Y, 0)
+    areas = (ra[:-1, :-1] - ra[:-1, 1:]) * (dec[1:, :-1] - dec[:-1, :-1])
+
+    fluxes = 1/(data[:-1, :-1]).flatten()
+    good_indices = (~np.isinf(fluxes) & (fluxes > 0))
+    areas = areas.flatten()[good_indices]
+    fluxes = fluxes[good_indices] / detector_area * photon_energy
+
+    sort_indices = np.argsort(fluxes)
+    fluxes = fluxes[sort_indices]
+    areas = np.cumsum(areas[sort_indices])
+
+    cov_func = interp1d(fluxes, areas, fill_value='extrapolate')
+
+    return cov_func
+
+
 def plot_lf_vmax(lf_values, lf_errors, redshift_bins, lum_bins, title='', lum_limits=[], compare_to_others={}, outfile='./lf.png', lum_sublabel=''):
     """Plot 1/V_max LF."""
     num_subplots = len(lf_values)
@@ -227,5 +251,52 @@ def incompleteness_histo(full_sample_fluxes, agn_fluxes, flux_bins):
     ax.set_facecolor('xkcd:dark purple')
     ax.set_title("Histo for incompleteness")
     ax.legend(loc='upper right')
+
+    return fig, ax
+
+
+def exposure_plot(wcs, data, survey='', band='', outfile=''):
+    """Plot the exposure map for the given survey and band."""
+    fig = plt.figure()
+
+    ax = fig.add_subplot(111, projection=wcs)
+    ax.imshow(data, cmap=plt.cm.viridis)
+    ax.set_xlabel('Ra')
+    ax.set_ylabel('Dec')
+    lon = ax.coords[0]
+    lat = ax.coords[1]
+    lon.set_major_formatter('d')
+    lat.set_major_formatter('d')
+    ax.set_title(f'{survey} exposure map for {band} in ICRS coordinates')
+    if len(outfile) < 1:
+        fig.savefig('./output/exposure_map.png')
+    else: 
+        fig.savefig(outfile)
+
+    return fig, ax
+
+
+def cov_func_plot(cov_func, min_logflux, max_logflux, comparison_data=(), survey='', band='', outfile=''):
+    """Plot coverage as a function of flux."""
+    fig, ax = utils.plot_setup(1, 1, set_global_params=True)
+
+    fluxes = np.logspace(min_logflux, max_logflux, num=100)
+    ax.plot(fluxes, cov_func(fluxes), label="This analysis", color='xkcd:raspberry')
+
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    # ax.set_xlim(left=min_logflux/100, right=max_logflux*10)
+    ax.set_ylim(bottom=1e-2)
+
+    colors = iter(['xkcd:blurple', 'xkcd:periwinkle', 'xkcd:bubblegum'])
+    for label, data in comparison_data:
+        ax.plot(data[:, 0], data[:, 1], label=label, color=next(colors))
+
+    ax.set_title(f'{survey} flux coverage for {band} band')
+    
+    if len(outfile) < 1:
+        fig.savefig('./output/coverage_flux_plot.png')
+    else:
+        fig.savefig(outfile)
 
     return fig, ax

@@ -27,9 +27,9 @@ from scipy.optimize import newton
 import numpy as np
 
 
-def setup_cosmology(H0=70, omega0=0.3):
+def setup_cosmology(H0=67.4, omegam0=0.32, omegade0=0.68):
     """Setup the assumed cosmology."""
-    cosmo = cosmology.FlatLambdaCDM(H0=H0, Om0=omega0)
+    cosmo = cosmology.FlatLambdaCDM(H0=H0, Om0=omegam0)
 
     return cosmo
 
@@ -89,3 +89,40 @@ def compute_z_from_mag(mag_abs, mag_app, z_guess, cosmo):
     return z_newton
 
 
+def double_power_law(L, A, Lstar, gamma1, gamma2, z=[], L_multiplier=1, evolution_multiplier=1):
+    """Compute value of broken double power law.
+
+    Can give a muliplier on L and on the whole function to test different evolution models.
+    """
+
+    return A / (((L * L_multiplier) / Lstar)**gamma1 + ((L * L_multiplier) / Lstar)**gamma2) * evolution_multiplier
+
+
+def LADE(L, z, *, A, gamma1, gamma2, Lstar, zc, p1, p2, d, no_k=False):
+    """Compute LF with LADE evolution."""
+    k = (1 + zc)**p1 + (1 + zc)**p2
+    if no_k is True:
+        k = 1
+
+    lade_vals_at_z = []
+    for zz in z:
+        eta1 = 1 / k * (((1 + zc) / (1 + zz))**p1 + ((1 + zc) / (1 + zz))**p2)
+        etad = 10**(d * (1 + zz))
+
+        lade_vals_at_z.append(np.array([L, double_power_law(L, A, Lstar, gamma1, gamma2, z=zz, L_multiplier=eta1, evolution_multiplier=etad)]).T)
+        # print(lade_vals_at_z)
+
+    return lade_vals_at_z
+
+
+def IR_evol(L, z, *, A, gamma1, gamma2, zref, Lstar, k1, k2, k3):
+    """Compute LF with IR evolution."""
+    lade_vals_at_z = []
+    for zz in z:
+        eps = np.log10((1 + zz) / (1 + zref))
+        L_mult = 10**-(k1 * eps + k2 * eps**2 + k3 * eps**3)
+
+        lade_vals_at_z.append(np.array([L, double_power_law(L, A, Lstar, gamma1, gamma2, z=zz, L_multiplier=L_mult)]).T)
+        # print(lade_vals_at_z)
+
+    return lade_vals_at_z

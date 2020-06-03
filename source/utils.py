@@ -132,3 +132,4 @@ def load_wcs(path, which_hdu=0):
     print(wcs)
 
     return wcs, hdu
+

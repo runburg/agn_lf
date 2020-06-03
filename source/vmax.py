@@ -189,7 +189,7 @@ def plot_lf_vmax(lf_values, lf_errors, redshift_bins, lum_bins, title='', lum_li
         if len(lum_limits) > 0:
             axflat[i].axvline(lum_limits[i], color='xkcd:pale peach', lw=2)
 
-        axflat[i].errorbar(bin_centers, bin_centers * lf_vals, xerr=lum_errors, yerr=bin_centers*lf_errors[i], label=label, ls='', marker='o', color='xkcd:tangerine')
+        axflat[i].errorbar(bin_centers, np.log(10) * bin_centers * lf_vals, xerr=lum_errors, yerr=bin_centers*lf_errors[i], label=label, ls='', marker='o', color='xkcd:tangerine')
 
         axflat[i].set_xlim(left=lum_bins[0], right=lum_bins[-1])
         axflat[i].set_xscale('log')
@@ -203,8 +203,8 @@ def plot_lf_vmax(lf_values, lf_errors, redshift_bins, lum_bins, title='', lum_li
         axflat[i].legend(handles=handles[0], labels=labels, loc='upper right', handlelength=0, handletextpad=0, markerscale=0, fontsize='x-large', frameon=False)
 
     ax = fig.add_subplot(111, frameon=False)
-    ax.set_xlabel(rf'$\log$($L{lum_sublabel}$ / erg s$^{-1}$)', labelpad=20, fontsize=20)
-    ax.set_ylabel(rf'd$\Phi$/d$\log$ $L{lum_sublabel}$ [Mpc$^{-3}$]', labelpad=35, fontsize=20)
+    ax.set_xlabel(rf'$\log$($L{lum_sublabel}$ / erg s$^{{-1}}$)', labelpad=20, fontsize=20)
+    ax.set_ylabel(rf'd$\Phi$/d$\log$ $L{lum_sublabel}$ [Mpc$^{{-3}}$]', labelpad=35, fontsize=20)
     ax.tick_params(axis='both', which='both', bottom=False, top=False, left=False, right=False, labelbottom=False, labeltop=False, labelleft=False, labelright=False)
 
     if len(compare_to_others) > 0:
@@ -212,9 +212,21 @@ def plot_lf_vmax(lf_values, lf_errors, redshift_bins, lum_bins, title='', lum_li
         big_legend.append(Line2D([0], [0], marker='o', color='xkcd:tangerine', ls='', markersize=10, label="This analysis"))
         for author in compare_to_others:
             color = next(colors)
-            big_legend.append(Line2D([0], [0], marker='o', color=color, markersize=10, label=author, ls=''))
+            if len(compare_to_others[author][0]) == 3:
+                marker = ''
+                ls = '-'
+                alpha = 0.7
+            else:
+                marker = 'o'
+                ls = ''
+                alpha = 1
+            big_legend.append(Line2D([0], [0], marker=marker, color=color, markersize=10, label=author, ls=ls))
             for i, vals in enumerate(compare_to_others[author]):
-                axflat[i].plot(vals[:, 0], vals[:, 1], ls='', marker='o', color=color)
+                if len(vals) == 3:
+                    axflat[i].plot(vals[0][:, 0], vals[0][:, 1], ls=ls, marker=marker, color=color, alpha=alpha)
+                    axflat[i].fill_between(vals[1][:, 0], vals[1][:, 1], vals[2][:, 1], ls=ls, color=color, alpha=(alpha - 0.3))
+                else:
+                    axflat[i].plot(vals[:, 0], vals[:, 1], ls=ls, marker=marker, color=color)
         ax.legend(handles=big_legend, bbox_to_anchor=(1.04, 0.5), loc='center left')
 
     fig.suptitle(title, fontsize=24, y=0.93)

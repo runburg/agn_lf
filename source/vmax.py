@@ -44,9 +44,11 @@ def calc_v_max(z_min, z_max, l_min, l_max, coverage, cosmo, use_dblquad=True):
         return vmax[0]
 
     from scipy import integrate
-    z = np.linspace(z_min, z_max, num=50)
-    l = np.logspace(np.log10(l_min), np.log10(l_max), num=50)
-    vmax = integrate.simps(integrate.simps(integrand(l[:, np.newaxis, np.newaxis], z[:, np.newaxis]), l, axis=0), z, axis=0)
+    z = np.linspace(z_min, z_max, num=25)
+    l = np.logspace(np.log10(l_min), np.log10(l_max), num=20)[:, np.newaxis]
+
+    vmax = np.trapz(np.trapz(integrand(l, z[np.newaxis, :, :]), l, axis=0), z, axis=0)
+
     return vmax
 
 
@@ -71,23 +73,23 @@ def compute_binned_vmax_values(l, z, l_bins, z_bins, cosmo, coverage=(lambda l, 
         l, llower, lupper = l
 
     z_insert_indices = np.searchsorted(z_bins, z)
-    print(z_insert_indices)
+    # print(z_insert_indices)
     l_insert_indices = np.searchsorted(l_bins, l)
 
-    zmin = [z_bins[i - 1] for i in z_insert_indices]
-    zmax = [z_bins[i] for i in z_insert_indices]
+    zmin = z_bins[z_insert_indices - 1]
+    zmax = z_bins[z_insert_indices]
 
-    lmin = [l_bins[i - 1] for i in l_insert_indices]
-    lmax = [l_bins[i] for i in l_insert_indices]
+    lmin = l_bins[l_insert_indices - 1]
+    lmax = l_bins[l_insert_indices]
 
     if bin_z_bounds is False:
-        zmax = [min([zzmax, zzupper]) for zzmax, zzupper in zip(zmax, zupper)]
-        zmin = [max([zzmin, zzlower]) for zzmin, zzlower in zip(zmin, zlower)]
+        zmax = np.minimum(zmax, zupper)
+        zmin = np.maximum(zmin, zlower)
 
         # print(zmin)
     # print(z_bins)
-    vmaxes = [calc_v_max(zzmin, zzmax, llmin, llmax, coverage, cosmo, use_dblquad=False) for i, j, zzmin, zzmax, llmin, llmax in zip(z_insert_indices, l_insert_indices, zmin, zmax, lmin, lmax)]
-    # vmaxes = calc_v_max(zmin, zmax, lmin, lmax, coverage, cosmo, use_dblquad=False)
+    # vmaxes = [calc_v_max(zzmin, zzmax, llmin, llmax, coverage, cosmo, use_dblquad=False) for i, j, zzmin, zzmax, llmin, llmax in zip(z_insert_indices, l_insert_indices, zmin, zmax, lmin, lmax)]
+    vmaxes = calc_v_max(zmin, zmax, lmin, lmax, coverage, cosmo, use_dblquad=False)
 
     return np.array(vmaxes)
 
@@ -109,19 +111,41 @@ def compute_lf_values(l, z, vmax, z_bins, l_bins):
     return np.array(lf_values), np.array(lf_errors)
 
 
-def compute_zmax(l, z, cosmo, flux_limit, zspacing=0.1):
+def compute_zmax(l, z, cosmo, flux_limit, zspacing=0.1, jack_version=False):
     """Return the maximum z such that the object's flux would be above the limit."""
     import astropy.units as u
 
+    if jack_version is False:
+        from astropy.cosmology import z_at_value
+
+        def func(lum):
+            return (np.sqrt(lum / (4 * np.pi * flux_limit)) * u.cm).to(u.Mpc)
+
+        zmin = z_at_value(cosmo.luminosity_distance, func(l.min()), zmin=1e-16, zmax=10)
+        zmax = z_at_value(cosmo.luminosity_distance, func(l.max()), zmax=100)
+        zgrid = np.logspace(np.log10(zmin), np.log10(zmax), 50)
+
+        lgrid = cosmo.luminosity_distance(zgrid)
+
+        return np.interp(func(l).value, lgrid.value, zgrid)
+
+
     zmaxes = []
 
+    zspacing_orig = zspacing
     for ll, zz in zip(l, z):
         diff = 0.1
         ztrial = zz
+        fine = False
+        zspacing = zspacing_orig
         while diff > 0:
             ztrial += zspacing
             diff = ll / (4 * np.pi * cosmo.luminosity_distance(ztrial).to(u.cm).value**2) - flux_limit
-
+            if diff < 0 and fine is False:
+                fine = True
+                diff = 0.1
+                ztrial -= zspacing
+                zspacing /= 10
         zmaxes.append(ztrial)
 
     return np.array(zmaxes)
@@ -140,7 +164,7 @@ def coverage_correction(full_fluxes, selected_fluxes):
     corrections = selected_binned / full_binned
     bin_centers = (bin_vals[1:] + bin_vals[:-1]) / 2
 
-    return(interp1d(bin_centers, corrections, fill_value='extrapolate'))
+    return interp1d(bin_centers, corrections, fill_value='extrapolate')
 
 
 def coverage_function(data, wcs, xlength, ylength, detector_area, photon_energy):
@@ -166,7 +190,7 @@ def coverage_function(data, wcs, xlength, ylength, detector_area, photon_energy)
     return cov_func
 
 
-def plot_lf_vmax(lf_values, lf_errors, redshift_bins, lum_bins, title='', lum_limits=[], compare_to_others={}, outfile='./lf.png', lum_sublabel=''):
+def plot_lf_vmax(lf_values, lf_errors, redshift_bins, lum_bins, title='', lum_limits=[], compare_to_others={}, other_runs={}, outfile='./lf.png', lum_sublabel=''):
     """Plot 1/V_max LF."""
     num_subplots = len(lf_values)
     ncols = np.ceil(np.sqrt(num_subplots))
@@ -189,13 +213,13 @@ def plot_lf_vmax(lf_values, lf_errors, redshift_bins, lum_bins, title='', lum_li
         if len(lum_limits) > 0:
             axflat[i].axvline(lum_limits[i], color='xkcd:pale peach', lw=2)
 
-        axflat[i].errorbar(bin_centers, np.log(10) * bin_centers * lf_vals, xerr=lum_errors, yerr=bin_centers*lf_errors[i], label=label, ls='', marker='o', color='xkcd:tangerine')
+        axflat[i].errorbar(bin_centers, np.log(10) * bin_centers * lf_vals, xerr=lum_errors, yerr=bin_centers*lf_errors[i]*np.log(10), label=label, ls='', marker='o', color='xkcd:tangerine')
 
         axflat[i].set_xlim(left=lum_bins[0], right=lum_bins[-1])
         axflat[i].set_xscale('log')
         axflat[i].set_xticklabels(np.log10(axflat[i].get_xticks()).astype(int))
 
-        axflat[i].set_ylim(top=8e-4, bottom=1e-8)
+        axflat[i].set_ylim(top=1e-3, bottom=5e-9)
         axflat[i].set_yscale('log')
 
         axflat[i].tick_params(axis='both', which='both', left=True, right=True, top=True, bottom=True, direction='in', labelsize=12)
@@ -206,9 +230,20 @@ def plot_lf_vmax(lf_values, lf_errors, redshift_bins, lum_bins, title='', lum_li
     ax.set_xlabel(rf'$\log$($L{lum_sublabel}$ / erg s$^{{-1}}$)', labelpad=20, fontsize=20)
     ax.set_ylabel(rf'd$\Phi$/d$\log$ $L{lum_sublabel}$ [Mpc$^{{-3}}$]', labelpad=35, fontsize=20)
     ax.tick_params(axis='both', which='both', bottom=False, top=False, left=False, right=False, labelbottom=False, labeltop=False, labelleft=False, labelright=False)
+    
+    colors = (color for color in ['xkcd:lilac', 'xkcd:cerulean', 'xkcd:aquamarine', 'xkcd:wine', 'xkcd:coral'])
+
+    for other in other_runs:
+        lf_values = other_runs[other][0]
+        lf_errors = other_runs[other][1]
+
+        color = next(colors)
+        for i, lf_vals in enumerate(lf_values):
+            axflat[i].errorbar(bin_centers, np.log(10) * bin_centers * lf_vals, xerr=lum_errors, yerr=bin_centers*lf_errors[i]*np.log(10), label=other, ls='', marker='o', color=color)
+
+        big_legend.append(Line2D([0], [0], marker='o', color=color, ls='', markersize=10, label=other))
 
     if len(compare_to_others) > 0:
-        colors = (color for color in ['xkcd:lilac', 'xkcd:cerulean', 'xkcd:aquamarine'])
         big_legend.append(Line2D([0], [0], marker='o', color='xkcd:tangerine', ls='', markersize=10, label="This analysis"))
         for author in compare_to_others:
             color = next(colors)
@@ -227,7 +262,8 @@ def plot_lf_vmax(lf_values, lf_errors, redshift_bins, lum_bins, title='', lum_li
                     axflat[i].fill_between(vals[1][:, 0], vals[1][:, 1], vals[2][:, 1], ls=ls, color=color, alpha=(alpha - 0.3))
                 else:
                     axflat[i].plot(vals[:, 0], vals[:, 1], ls=ls, marker=marker, color=color)
-        ax.legend(handles=big_legend, bbox_to_anchor=(1.04, 0.5), loc='center left')
+        # ax.legend(handles=big_legend, bbox_to_anchor=(1.01, 0.5), loc='center left')
+        axflat[-1].legend(handles=big_legend, loc='lower left')
 
     fig.suptitle(title, fontsize=24, y=0.93)
 

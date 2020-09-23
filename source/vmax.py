@@ -253,7 +253,7 @@ def plot_lf_vmax(lf_values, lf_errors, redshift_bins, lum_bins, title='', lum_li
     ax.set_ylabel(rf'd$\Phi$/d$\log$ $L{lum_sublabel}$ [Mpc$^{{-3}}$]', labelpad=35, fontsize=20)
     ax.tick_params(axis='both', which='both', bottom=False, top=False, left=False, right=False, labelbottom=False, labeltop=False, labelleft=False, labelright=False)
     
-    colors = (color for color in ['xkcd:lilac', 'xkcd:cerulean', 'xkcd:aquamarine', 'xkcd:wine', 'xkcd:coral'])
+    colors = (color for color in ['xkcd:lilac', 'xkcd:cerulean', 'xkcd:aquamarine', 'xkcd:wine', 'xkcd:coral', 'xkcd:seafoam green'])
 
     for other in other_runs:
         lf_values = other_runs[other][0]

@@ -2,4 +2,5 @@
 matplotlib
 numpy
 astropy
-
+scipy
+scikit-learn

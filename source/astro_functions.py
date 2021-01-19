@@ -115,14 +115,20 @@ def LADE(L, z, *, A, gamma1, gamma2, Lstar, zc, p1, p2, d, no_k=False):
     return lade_vals_at_z
 
 
-def IR_evol(L, z, *, A, gamma1, gamma2, zref, Lstar, k1, k2, k3):
+def IR_evol(L, z, *, A, gamma1, gamma2, zref, Lstar, k1, k2, k3, limits=None):
     """Compute LF with IR evolution."""
     lade_vals_at_z = []
     for zz in z:
         eps = np.log10((1 + zz) / (1 + zref))
         L_mult = 10**-(k1 * eps + k2 * eps**2 + k3 * eps**3)
 
-        lade_vals_at_z.append(np.array([L, double_power_law(L, A, Lstar, gamma1, gamma2, z=zz, L_multiplier=L_mult)]).T)
+        if limits is None:
+            lade_vals_at_z.append(np.array([L, double_power_law(L, A, Lstar, gamma1, gamma2, z=zz, L_multiplier=L_mult)]).T)
+        else:
+            for l in limits:
+                low_index = np.argwhere(L > l[0]) - 1
+                high_index = np.argwhere(L > l[1])
+                lade_vals_at_z.append(np.array([L[low_index:high_index], double_power_law(L, A, Lstar, gamma1, gamma2, z=zz, L_multiplier=L_mult)][low_index:high_index]).T)
         # print(lade_vals_at_z)
 
     return lade_vals_at_z

@@ -212,7 +212,7 @@ def coverage_function(data, wcs, xlength, ylength, detector_area, photon_energy)
     return cov_func
 
 
-def plot_lf_vmax(lf_values, lf_errors, redshift_bins, lum_bins, title='', lum_limits=[], compare_to_others={}, other_runs={}, outfile='./lf.png', lum_sublabel=''):
+def plot_lf_vmax(lf_values, lf_errors, redshift_bins, lum_bins, title='', lum_limits=[], compare_to_others={}, other_runs={}, outfile='./lf.png', lum_sublabel='', others_limits={}):
     """Plot 1/V_max LF."""
     num_subplots = len(lf_values)
     ncols = np.ceil(np.sqrt(num_subplots))
@@ -232,10 +232,12 @@ def plot_lf_vmax(lf_values, lf_errors, redshift_bins, lum_bins, title='', lum_li
     for i, lf_vals in enumerate(lf_values):
         label = rf'{round(redshift_bins[i], 2)} $<$ z $\leq$ {round(redshift_bins[i+1], 2)}'
 
+        lum_lim_index = 0
         if len(lum_limits) > 0:
             axflat[i].axvline(lum_limits[i], color='xkcd:pale peach', lw=2)
+            lum_lim_index = np.argmax(lum_limits[i] < bin_centers)
 
-        axflat[i].errorbar(bin_centers, np.log(10) * bin_centers * lf_vals, xerr=lum_errors, yerr=bin_centers*lf_errors[i]*np.log(10), label=label, ls='', marker='o', color='xkcd:tangerine', capsize=3, zorder=100)
+        axflat[i].errorbar(bin_centers[lum_lim_index:], np.log(10) * bin_centers[lum_lim_index:] * lf_vals[lum_lim_index:], xerr=lum_errors[lum_lim_index:], yerr=bin_centers[lum_lim_index:]*lf_errors[i][:, lum_lim_index:]*np.log(10), label=label, ls='', marker='o', color='xkcd:orangered', capsize=3, zorder=100)
 
         axflat[i].set_xlim(left=lum_bins[0], right=lum_bins[-1])
         axflat[i].set_xscale('log')
@@ -253,22 +255,35 @@ def plot_lf_vmax(lf_values, lf_errors, redshift_bins, lum_bins, title='', lum_li
     ax.set_ylabel(rf'd$\Phi$/d$\log$ $L{lum_sublabel}$ [Mpc$^{{-3}}$]', labelpad=35, fontsize=20)
     ax.tick_params(axis='both', which='both', bottom=False, top=False, left=False, right=False, labelbottom=False, labeltop=False, labelleft=False, labelright=False)
     
-    colors = (color for color in ['xkcd:lilac', 'xkcd:cerulean', 'xkcd:aquamarine', 'xkcd:wine', 'xkcd:coral', 'xkcd:seafoam green'])
+    colors = (color for color in ['xkcd:petrol', 'xkcd:royal', 'xkcd:red wine', 'xkcd:lilac', 'xkcd:cerulean', 'xkcd:aquamarine', 'xkcd:wine', 'xkcd:coral', 'xkcd:seafoam green'])
+    offset = (off for off in [1.05, 0.95, 1.1])
 
     for other in other_runs:
         lf_values = other_runs[other][0]
         lf_errors = other_runs[other][1]
 
         color = next(colors)
+        offs = next(offset)
         for i, lf_vals in enumerate(lf_values):
-            axflat[i].errorbar(bin_centers, np.log(10) * bin_centers * lf_vals, xerr=lum_errors, yerr=bin_centers*lf_errors[i]*np.log(10), label=other, ls='', marker='o', color=color, capsize=3)
+            lum_lim_index = 0
+            if len(lum_limits) > 0:
+                # axflat[i].axvline(lum_limits[i], color='xkcd:pale peach', lw=2)
+                lum_lim_index = np.argmax(lum_limits[i] < bin_centers)
+
+            axflat[i].errorbar(bin_centers[lum_lim_index:] * offs, np.log(10) * bin_centers[lum_lim_index:] * lf_vals[lum_lim_index:], xerr=lum_errors[lum_lim_index:], yerr=bin_centers[lum_lim_index:]*lf_errors[i][:, lum_lim_index:]*np.log(10), label=other, ls='', marker='o', color=color, capsize=3)
 
         big_legend.append(Line2D([0], [0], marker='o', color=color, ls='', markersize=10, label=other))
 
+    colors = (color for color in ['xkcd:bland', 'xkcd:dusty lavender', 'xkcd:grey/green', 'xkcd:putty'])
     if len(compare_to_others) > 0:
-        big_legend.append(Line2D([0], [0], marker='o', color='xkcd:tangerine', ls='', markersize=10, label="This analysis"))
+        big_legend.append(Line2D([0], [0], marker='o', color='xkcd:orangered', ls='', markersize=10, label="This analysis"))
         for author in compare_to_others:
             color = next(colors)
+            try:
+                lims = others_limits[author]
+            except KeyError:
+                lims = None
+                print('No limits for', author)
             if len(compare_to_others[author][0]) == 3:
                 marker = ''
                 ls = '-'
@@ -278,12 +293,22 @@ def plot_lf_vmax(lf_values, lf_errors, redshift_bins, lum_bins, title='', lum_li
                 ls = ''
                 alpha = 1
             big_legend.append(Line2D([0], [0], marker=marker, color=color, markersize=10, label=author, ls=ls))
+            offs = next(offset)
             for i, vals in enumerate(compare_to_others[author]):
                 if len(vals) == 3:
-                    axflat[i].plot(vals[0][:, 0], vals[0][:, 1], ls=ls, marker=marker, color=color, alpha=alpha)
-                    axflat[i].fill_between(vals[1][:, 0], vals[1][:, 1], vals[2][:, 1], ls=ls, color=color, alpha=(alpha - 0.3))
+                    upper_index = None
+                    lower_index = None
+                    axflat[i].plot(vals[0][lower_index:upper_index, 0], vals[0][lower_index:upper_index, 1], ls='--', marker=marker, color=color, alpha=0.2)
+                    axflat[i].fill_between(vals[1][lower_index:upper_index, 0], vals[1][lower_index:upper_index, 1], vals[2][lower_index:upper_index, 1], ls='--', color=color, alpha=0.05)
+                    if lims is not None:
+                        lower_index = np.argmax(lims[i][0] < vals[0][:, 0]) - 1
+                        upper_index = np.argmax(lims[i][1] < vals[0][:, 0])
+                        if upper_index == 0: upper_index = None
+                        # print(lims[i][0], lower_index, upper_index, vals[0][:, 0])
+                        axflat[i].plot(vals[0][lower_index:upper_index, 0], vals[0][lower_index:upper_index, 1], ls=ls, marker=marker, color=color, alpha=0.5)
+                        axflat[i].fill_between(vals[1][lower_index:upper_index, 0], vals[1][lower_index:upper_index, 1], vals[2][lower_index:upper_index, 1], ls=ls, color=color, alpha=0.3)
                 else:
-                    axflat[i].plot(vals[:, 0], vals[:, 1], ls=ls, marker=marker, color=color)
+                    axflat[i].plot(vals[:, 0] + offs, vals[:, 1], ls=ls, marker=marker, color=color)
         # ax.legend(handles=big_legend, bbox_to_anchor=(1.01, 0.5), loc='center left')
         ax.legend(handles=big_legend, loc='lower left')
 

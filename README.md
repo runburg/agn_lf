@@ -1,9 +1,2 @@
-TODO:
-- Implement K-corrections
-- Implement selection functions
-- Implement selection criteria
-- Implement validation
-- Implement better error propagation
-- Implement MCMC
-- Implement better path management
 
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/runburg/agn_lf/HEAD)

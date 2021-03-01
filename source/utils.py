@@ -62,18 +62,18 @@ def trim_axes(axes, N):
     return [axes]
 
 
-def configure_plot_params(fontsize=20, spacing=0.2):
+def configure_plot_params(fontsize=14, spacing=0.2):
     """Make plots look the way I want."""
     mpl.rc('font', **{'family': 'serif', 'serif': ['cmr10'], 'weight': 'light'})
     mpl.rc('text', usetex=True)
     mpl.rc('text.latex', preamble=r'\usepackage{amsmath, graphicx}')
     mpl.rcParams['mathtext.fontset'] = 'cm'
-    # mpl.rcParams['font.serif'] = 'Computer Modern Roman'
     mpl.rcParams["font.family"] = "serif"
-    # mpl.rcParams['font.size'] = fontsize
-    # mpl.rcParams['mathtext.fontset'] = 'cm'
-    # mpl.rcParams['axes.labelsize'] = 'xx-large'
-    # mpl.rcParams['axes.titlesize'] = 'xx-large'
+    mpl.rcParams['font.serif'] = 'Computer Modern Roman'
+    mpl.rcParams['font.size'] = fontsize
+    mpl.rcParams['mathtext.fontset'] = 'cm'
+    mpl.rcParams['axes.labelsize'] = 'x-large'
+    mpl.rcParams['axes.titlesize'] = 'x-large'
 
     mpl.rcParams['figure.subplot.wspace'] = spacing
     mpl.rcParams['figure.subplot.hspace'] = spacing
@@ -83,12 +83,22 @@ def configure_plot_params(fontsize=20, spacing=0.2):
     mpl.rcParams['xtick.major.width'] = 1
     mpl.rcParams['xtick.minor.size'] = 3.75
     mpl.rcParams['xtick.minor.width'] = 0.5
+    mpl.rcParams['xtick.direction'] = 'in'
+    mpl.rcParams['xtick.top'] = True
+    mpl.rcParams['xtick.bottom'] = True
+    mpl.rcParams['xtick.major.top'] = True
+    mpl.rcParams['xtick.minor.top'] = True
 
     # mpl.rcParams['ytick.labelsize'] = 'xx-large'
     mpl.rcParams['ytick.major.size'] = 7.5
     mpl.rcParams['ytick.major.width'] = 1
     mpl.rcParams['ytick.minor.size'] = 3.75
     mpl.rcParams['ytick.minor.width'] = 0.5
+    mpl.rcParams['ytick.direction'] = 'in'
+    mpl.rcParams['ytick.right'] = True
+    mpl.rcParams['ytick.left'] = True
+    mpl.rcParams['ytick.major.right'] = True
+    mpl.rcParams['ytick.minor.right'] = True
 
 
 def plot_setup(rows, cols, d=0, buffer=(0.4, 0.4), set_global_params=False):

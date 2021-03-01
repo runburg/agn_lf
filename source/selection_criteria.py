@@ -85,7 +85,7 @@ def plot_wedge(data_table, flux3_6, flux4_5, flux5_8, flux8_0, selection=[]):
     from matplotlib.font_manager import FontProperties
     ticks_font = FontProperties(family='times new roman', size=12, weight='normal', stretch='normal')
 
-    fig = plt.figure(figsize=(10.0, 5.0))
+    fig, (ax1, ax2) = plt.subplots(ncols=2, figsize=(10.0, 5.0), gridspec_kw={'wspace':  0.4})
 
     # lacy wedge colors
     _, (fr5p8o3p6, fr8p0o4p5) = select_ir(data_table, flux3_6, flux4_5, flux5_8, flux8_0, selection_cuts='lacy05', return_data=True)
@@ -119,7 +119,9 @@ def plot_wedge(data_table, flux3_6, flux4_5, flux5_8, flux8_0, selection=[]):
 
     diagmd = 0.8*c1mod+0.5
 
-    ax1 = fig.add_subplot(121,autoscale_on=False,xlim=(-0.6,0.8),ylim = (-0.8,1.3))
+    # ax1 = fig.add_subplot(121,autoscale_on=False,xlim=(-0.6,0.8),ylim = (-0.8,1.3), constrained_layout=True)
+    ax1.set_xlim(left=-0.6, right=0.8)
+    ax1.set_ylim(bottom=-0.8, top=1.3)
     for label in ax1.get_xticklabels():
         label.set_fontproperties(ticks_font)
     for label in ax1.get_yticklabels():
@@ -179,7 +181,9 @@ def plot_wedge(data_table, flux3_6, flux4_5, flux5_8, flux8_0, selection=[]):
     # lacy=(fr5p8o3p6 > -0.1) & (fr8p0o4p5 > -0.2) & (fr8p0o4p5 < 0.8*fr5p8o3p6+0.5)
     #ax1.plot(fr5p8o3p6[lacy],fr8p0o4p5[lacy],'b.',alpha=1,ms=3)
 
-    ax2 = fig.add_subplot(122,autoscale_on=False,xlim=(-1.0,3.5),ylim = (-0.2,1.5))
+    # ax2 = fig.add_subplot(122,autoscale_on=False,xlim=(-1.0,3.5),ylim = (-0.2,1.5), constrained_layout=True)
+    ax2.set_xlim(left=-0.5, right=2.5)
+    ax2.set_ylim(bottom=-0.2, top=1.5)
     for label in ax1.get_xticklabels():
         label.set_fontproperties(ticks_font)
     for label in ax1.get_yticklabels():

@@ -98,6 +98,35 @@ def double_power_law(L, A, Lstar, gamma1, gamma2, z=[], L_multiplier=1, evolutio
     return A / (((L * L_multiplier) / Lstar)**gamma1 + ((L * L_multiplier) / Lstar)**gamma2) * evolution_multiplier
 
 
+def LDDE(L, z, *, A, gamma1, gamma2, Lstar, zcstar, p1, p2, alpha, La):
+    """Compute LF with LADE evolution."""
+    ldde_vals_at_z = []
+
+    def zc(l, zcstar=zcstar, La=La, alpha=alpha):
+        if l < La:
+            return zcstar * (l / La)**alpha
+        else:
+            return zcstar
+
+    def ez(z, l, p1=p1, p2=p2):
+        if z <= zc(l):
+            return (1 + z)**p1
+        else:
+            return (1 + zc(l))**p1 * ((1 + z) / (1 + zc(l)))**p2
+
+    ldde_vals_at_z = []
+
+    for zz in z:
+        zbin_lf = np.zeros(len(L))
+        for j, ll in enumerate(L):
+            zbin_lf[j] = double_power_law(ll, A, Lstar, gamma1, gamma2, z=zz) * ez(zz, ll)
+    # ez = lambda l, red: (1 + red)**p1 if red < zc(l) else #  wtf goes here
+        ldde_vals_at_z.append(np.array([L, zbin_lf]).T)
+        # print(lade_vals_at_z)
+
+    return np.array(ldde_vals_at_z)
+
+
 def LADE(L, z, *, A, gamma1, gamma2, Lstar, zc, p1, p2, d, no_k=False):
     """Compute LF with LADE evolution."""
     k = (1 + zc)**p1 + (1 + zc)**p2

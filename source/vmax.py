@@ -42,6 +42,7 @@ def calc_v_max(z_min, z_max, l_min, l_max, coverage, cosmo, use_dblquad=True):
     def integrand(l, z):
         cov = coverage(l, z)
         cov[cov < 0] = 1e-10 
+        # print(cov)
         return cov * deg2_to_sr * cosmo.differential_comoving_volume(z).value * l / l
 
     if use_dblquad is True:
@@ -64,14 +65,23 @@ def calc_v_max(z_min, z_max, l_min, l_max, coverage, cosmo, use_dblquad=True):
     return vmax
 
 
-def compute_lf_vmax_per_z_bin(luminosities, v_max, lum_bins):
+def compute_lf_vmax_per_z_bin(luminosities, v_max, lum_bins, poisson_error=False):
     """Compute value of luminosity function for each lum_bin."""
     lf = []
     errors = []
+
+    def poiereror(n, S=1):
+        return (n+1) * (1 - 1 / (9 * (n+1)) + S / (3 * np.sqrt(n+1)))**3
+
     for i in range(1, len(lum_bins)):
         in_bin = (lum_bins[i - 1] < luminosities) & (luminosities < lum_bins[i])
-        lf.append(np.sum(1 / v_max[in_bin]))
-        errors.append(np.sqrt(np.sum((1 / v_max[in_bin])**2)))
+        lf.append(np.sum(1 / v_max[in_bin], where=(v_max[in_bin]>0)&(~np.isnan(v_max[in_bin]))))
+        if poisson_error is False:
+            errors.append(np.sqrt(np.sum((1 / v_max[in_bin])**2), where=v_max[in_bin]>0))
+        else:
+            upper_error = poiereror(np.sum(in_bin))
+            lower_error = poiereror(np.sum(in_bin) - 1)
+            errors.append([upper_error, lower_error])
 
     return np.array(lf), np.array(errors)
 
@@ -110,7 +120,7 @@ def compute_binned_vmax_values(l, z, l_bins, z_bins, cosmo, coverage=(lambda l, 
     return np.array(vmaxes)
 
 
-def compute_lf_values(l, z, vmax, z_bins, l_bins):
+def compute_lf_values(l, z, vmax, z_bins, l_bins, poisson_error=False):
     """Compute LF values for all redshift bins."""
     lf_values = []
     lf_errors = []
@@ -120,7 +130,7 @@ def compute_lf_values(l, z, vmax, z_bins, l_bins):
         objs_in_zbin = (z_insert_indices == zbin)
         bin_l = l[objs_in_zbin]
         v = vmax[objs_in_zbin]
-        phi, error_phi = compute_lf_vmax_per_z_bin(bin_l, v, l_bins)
+        phi, error_phi = compute_lf_vmax_per_z_bin(bin_l, v, l_bins, poisson_error=poisson_error)
         lf_values.append(phi)
         lf_errors.append(error_phi)
 
@@ -182,22 +192,29 @@ def coverage_correction(full_fluxes, selected_fluxes):
     full_binned, bin_vals = histogram(full_fluxes, bins='blocks')
     selected_binned, bin_edges = histogram(selected_fluxes, bins=bin_vals)
 
+    if np.any(selected_binned) == 0:
+        print(np.sum(selected_binned == 0), 'zeros in coverage correction')
+
     corrections = selected_binned / full_binned
     bin_centers = (bin_vals[1:] + bin_vals[:-1]) / 2
 
-    return interp1d(bin_centers, corrections, fill_value='extrapolate')
+    return interp1d(bin_centers, corrections, fill_value=1, bounds_error=False, kind='nearest')
 
 
-def coverage_function(data, wcs, xlength, ylength, detector_area, photon_energy):
+def coverage_function(data, wcs, xlength, ylength, detector_area, photon_energy, truncate_radec=1):
     """Calculate the coverage as a function of flux."""
 
     x = np.arange(xlength)
     y = np.arange(ylength)
     X, Y = np.meshgrid(x, y)
     ra, dec = wcs.wcs_pix2world(X, Y, 0)
-    areas = np.abs((ra[:-1, :-1] - ra[:-1, 1:]) * (dec[1:, :-1] - dec[:-1, :-1]))
 
-    fluxes = 1/(data[:-1, :-1]).flatten()
+    if truncate_radec != 1:
+        truncate_radec = (ra[:-1, :-1] > truncate_radec[0]) & (ra[:-1, :-1] < truncate_radec[1]) & (dec[:-1, :-1] > truncate_radec[2]) & (dec[:-1, :-1] < truncate_radec[3])
+
+    areas = np.abs((ra[:-1, :-1] - ra[:-1, 1:]) * (dec[1:, :-1] - dec[:-1, :-1])) * truncate_radec
+
+    fluxes = 1/(data[:-1, :-1] * truncate_radec).flatten()
     fluxes[fluxes < 0] = 0
     good_indices = (~np.isinf(fluxes) & (fluxes > 0))
     areas = areas.flatten()[good_indices]
@@ -209,10 +226,12 @@ def coverage_function(data, wcs, xlength, ylength, detector_area, photon_energy)
 
     cov_func = interp1d(fluxes, areas, fill_value='extrapolate')
 
+    print('The total coverage is', areas[-1], 'square degrees.')
+
     return cov_func
 
 
-def plot_lf_vmax(lf_values, lf_errors, redshift_bins, lum_bins, title='', lum_limits=[], compare_to_others={}, other_runs={}, outfile='./lf.png', lum_sublabel='', others_limits={}):
+def plot_lf_vmax(lf_values, lf_errors, redshift_bins, lum_bins, this_label='This analysis', title='', lum_limits=[], compare_to_others={}, other_runs={}, outfile='./lf.png', lum_sublabel='', others_limits={}):
     """Plot 1/V_max LF."""
     num_subplots = len(lf_values)
     ncols = np.ceil(np.sqrt(num_subplots))
@@ -223,7 +242,8 @@ def plot_lf_vmax(lf_values, lf_errors, redshift_bins, lum_bins, title='', lum_li
 
     axflat = axs.flatten()
 
-    big_legend = []
+    vmax_legend = []
+    lit_legend = []
 
     bin_centers = (lum_bins[:-1] + lum_bins[1:]) / 2
 
@@ -234,7 +254,7 @@ def plot_lf_vmax(lf_values, lf_errors, redshift_bins, lum_bins, title='', lum_li
 
         lum_lim_index = 0
         if len(lum_limits) > 0:
-            axflat[i].axvline(lum_limits[i], color='xkcd:pale peach', lw=2)
+            # axflat[i].axvline(lum_limits[i], color='xkcd:pale peach', lw=2)
             lum_lim_index = np.argmax(lum_limits[i] < bin_centers)
 
         axflat[i].errorbar(bin_centers[lum_lim_index:], np.log(10) * bin_centers[lum_lim_index:] * lf_vals[lum_lim_index:], xerr=lum_errors[lum_lim_index:], yerr=bin_centers[lum_lim_index:]*lf_errors[i][:, lum_lim_index:]*np.log(10), label=label, ls='', marker='o', color='xkcd:orangered', capsize=3, zorder=100)
@@ -243,7 +263,7 @@ def plot_lf_vmax(lf_values, lf_errors, redshift_bins, lum_bins, title='', lum_li
         axflat[i].set_xscale('log')
         axflat[i].set_xticklabels(np.log10(axflat[i].get_xticks()).astype(int))
 
-        axflat[i].set_ylim(top=1e-3, bottom=5e-9)
+        axflat[i].set_ylim(top=1e-3, bottom=2e-8)
         axflat[i].set_yscale('log')
 
         axflat[i].tick_params(axis='both', which='both', left=True, right=True, top=True, bottom=True, direction='in', labelsize=12)
@@ -254,9 +274,9 @@ def plot_lf_vmax(lf_values, lf_errors, redshift_bins, lum_bins, title='', lum_li
     ax.set_xlabel(rf'$\log$($L{lum_sublabel}$ / erg s$^{{-1}}$)', labelpad=20, fontsize=20)
     ax.set_ylabel(rf'd$\Phi$/d$\log$ $L{lum_sublabel}$ [Mpc$^{{-3}}$]', labelpad=35, fontsize=20)
     ax.tick_params(axis='both', which='both', bottom=False, top=False, left=False, right=False, labelbottom=False, labeltop=False, labelleft=False, labelright=False)
-    
+
     colors = (color for color in ['xkcd:petrol', 'xkcd:royal', 'xkcd:red wine', 'xkcd:lilac', 'xkcd:cerulean', 'xkcd:aquamarine', 'xkcd:wine', 'xkcd:coral', 'xkcd:seafoam green'])
-    offset = (off for off in [1.05, 0.95, 1.1])
+    offset = (off for off in [1.05, 0.95, 1.1, 0.9, 1.25, 0.975])
 
     for other in other_runs:
         lf_values = other_runs[other][0]
@@ -270,13 +290,13 @@ def plot_lf_vmax(lf_values, lf_errors, redshift_bins, lum_bins, title='', lum_li
                 # axflat[i].axvline(lum_limits[i], color='xkcd:pale peach', lw=2)
                 lum_lim_index = np.argmax(lum_limits[i] < bin_centers)
 
-            axflat[i].errorbar(bin_centers[lum_lim_index:] * offs, np.log(10) * bin_centers[lum_lim_index:] * lf_vals[lum_lim_index:], xerr=lum_errors[lum_lim_index:], yerr=bin_centers[lum_lim_index:]*lf_errors[i][:, lum_lim_index:]*np.log(10), label=other, ls='', marker='o', color=color, capsize=3)
+            axflat[i].errorbar(bin_centers[lum_lim_index:] * offs, np.log(10) * bin_centers[lum_lim_index:] * lf_vals[lum_lim_index:], xerr=lum_errors[lum_lim_index:], yerr=bin_centers[lum_lim_index:]*lf_errors[i][:, lum_lim_index:]*np.log(10), label=other, ls='', marker='p', color=color, capsize=3, markersize=8)
 
-        big_legend.append(Line2D([0], [0], marker='o', color=color, ls='', markersize=10, label=other))
+        vmax_legend.append(Line2D([0], [0], marker='p', color=color, ls='', markersize=8, label=other))
 
     colors = (color for color in ['xkcd:bland', 'xkcd:dusty lavender', 'xkcd:grey/green', 'xkcd:putty'])
     if len(compare_to_others) > 0:
-        big_legend.append(Line2D([0], [0], marker='o', color='xkcd:orangered', ls='', markersize=10, label="This analysis"))
+        vmax_legend.append(Line2D([0], [0], marker='o', color='xkcd:orangered', ls='', markersize=10, label=this_label))
         for author in compare_to_others:
             color = next(colors)
             try:
@@ -292,25 +312,29 @@ def plot_lf_vmax(lf_values, lf_errors, redshift_bins, lum_bins, title='', lum_li
                 marker = 'o'
                 ls = ''
                 alpha = 1
-            big_legend.append(Line2D([0], [0], marker=marker, color=color, markersize=10, label=author, ls=ls))
+            lit_legend.append(Line2D([0], [0], marker=marker, color=color, lw=3, markersize=10, label=author, ls=ls))
             offs = next(offset)
             for i, vals in enumerate(compare_to_others[author]):
                 if len(vals) == 3:
                     upper_index = None
                     lower_index = None
-                    axflat[i].plot(vals[0][lower_index:upper_index, 0], vals[0][lower_index:upper_index, 1], ls='--', marker=marker, color=color, alpha=0.2)
-                    axflat[i].fill_between(vals[1][lower_index:upper_index, 0], vals[1][lower_index:upper_index, 1], vals[2][lower_index:upper_index, 1], ls='--', color=color, alpha=0.05)
+                    axflat[i].plot(vals[0][lower_index:upper_index, 0], vals[0][lower_index:upper_index, 1], ls='--', marker=marker, color=color, alpha=0.3)
+                    axflat[i].fill_between(vals[1][lower_index:upper_index, 0], vals[1][lower_index:upper_index, 1], vals[2][lower_index:upper_index, 1], ls='--', color=color, alpha=0.10)
                     if lims is not None:
                         lower_index = np.argmax(lims[i][0] < vals[0][:, 0]) - 1
                         upper_index = np.argmax(lims[i][1] < vals[0][:, 0])
                         if upper_index == 0: upper_index = None
+                        # if lower_index < 0: lower_index = 0
+                        # print(lower_index)
                         # print(lims[i][0], lower_index, upper_index, vals[0][:, 0])
                         axflat[i].plot(vals[0][lower_index:upper_index, 0], vals[0][lower_index:upper_index, 1], ls=ls, marker=marker, color=color, alpha=0.5)
                         axflat[i].fill_between(vals[1][lower_index:upper_index, 0], vals[1][lower_index:upper_index, 1], vals[2][lower_index:upper_index, 1], ls=ls, color=color, alpha=0.3)
                 else:
                     axflat[i].plot(vals[:, 0] + offs, vals[:, 1], ls=ls, marker=marker, color=color)
         # ax.legend(handles=big_legend, bbox_to_anchor=(1.01, 0.5), loc='center left')
-        ax.legend(handles=big_legend, loc='lower left')
+    lil_legend = ax.legend(handles=vmax_legend, loc='lower left')
+    ax.add_artist(lil_legend)
+    ax.legend(handles=lit_legend, loc='lower left', bbox_to_anchor=(0.67, 0))
 
     fig.suptitle(title, fontsize=24, y=0.93)
 
@@ -321,13 +345,15 @@ def plot_lf_vmax(lf_values, lf_errors, redshift_bins, lum_bins, title='', lum_li
 
 def l_z_histo(l, z, l_bins, z_bins, band='band', unit=''):
     """Create a histogram of object l and z."""
+    from matplotlib import cm
+
     fig, ax = plt.subplots()
-    histo, _, _, im = ax.hist2d(z, l, bins=[z_bins, l_bins])
+    histo, _, _, im = ax.hist2d(z, l, bins=[z_bins, l_bins], cmap=cm.cividis)
     ax.set_yscale('log')
     ax.set_xlabel('Redshifts')
-    ax.set_ylabel(rf'{band} luminosity [{unit}]')
+    ax.set_ylabel(rf'$L_{{{band}}}$ [{unit}]')
     fig.colorbar(im)
-    ax.set_title(rf'Histogram of luminosity \& redshift for {len(l)} {band} sources')
+    # ax.set_title(rf'Histogram of luminosity \& redshift for {len(l)} {band} sources')
 
     return fig, ax
 
@@ -350,48 +376,96 @@ def incompleteness_histo(full_sample_fluxes, agn_fluxes, flux_bins):
     return fig, ax
 
 
-def exposure_plot(wcs, data, survey='', band='', outfile=''):
+def exposure_plot(wcs, data, survey='', band='', outfile='', truncate_radec=None):
     """Plot the exposure map for the given survey and band."""
     fig = plt.figure()
 
     ax = fig.add_subplot(111, projection=wcs)
-    ax.imshow(data, cmap=plt.cm.viridis)
+    ax.imshow(data, cmap=plt.cm.cividis)
     ax.set_xlabel('Ra')
     ax.set_ylabel('Dec')
+
+    if truncate_radec is not None:
+        ax.plot([truncate_radec[0]]*2+[truncate_radec[1]]*2+[truncate_radec[0]], [truncate_radec[2], truncate_radec[3], truncate_radec[3], truncate_radec[2], truncate_radec[2]], transform=ax.get_transform('world'))
+
     lon = ax.coords[0]
+    print(lon)
     lat = ax.coords[1]
     lon.set_major_formatter('d')
     lat.set_major_formatter('d')
-    ax.set_title(f'{survey} exposure map for {band} in ICRS coordinates')
+    # ax.set_title(f'{survey} exposure map for {band} in ICRS coordinates')
     if len(outfile) < 1:
         fig.savefig('./output/exposure_map.png')
     else: 
-        fig.savefig(outfile)
+        fig.savefig(outfile, bbox_inches='tight')
 
     return fig, ax
 
 
-def cov_func_plot(cov_func, min_logflux, max_logflux, comparison_data=(), survey='', band='', outfile=''):
+def cov_func_plot(cov_func, min_logflux, max_logflux, truncate_radec=None, comparison_data=(), survey='', band='', outfile=''):
     """Plot coverage as a function of flux."""
     fig, ax = utils.plot_setup(1, 1, set_global_params=True)
 
     fluxes = np.logspace(min_logflux, max_logflux, num=100)
     ax.plot(fluxes, cov_func(fluxes), label="This analysis", color='xkcd:raspberry')
+    print('Total coverage for:', cov_func(fluxes[-1]), 'square degrees.')
 
     ax.set_xscale('log')
     ax.set_yscale('log')
     # ax.set_xlim(left=min_logflux/100, right=max_logflux*10)
     ax.set_ylim(bottom=1e-2)
 
+    if truncate_radec is not None:
+        ax.axvline(truncate_radec[0])
+        ax.axvline(truncate_radec[1])
+        ax.axhline(truncate_radec[2])
+        ax.axhline(truncate_radec[3])
+
     colors = iter(['xkcd:blurple', 'xkcd:periwinkle', 'xkcd:bubblegum'])
     for label, data in comparison_data:
         ax.plot(data[:, 0], data[:, 1], label=label, color=next(colors))
 
-    ax.set_title(f'{survey} flux coverage for {band} band')
+    # ax.set_title(f'{survey} flux coverage for {band} band')
+    ax.set_xlabel(r'Flux [photons/area/s]')
+    ax.set_ylabel(r'Coverage [deg$^2$]')
     
     if len(outfile) < 1:
         fig.savefig('./output/coverage_flux_plot.png')
     else:
-        fig.savefig(outfile)
+        fig.savefig(outfile, bbox_inches='tight')
 
     return fig, ax
+
+
+def fracerr_poisson(n):
+    # sigma_upper
+    n_values = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15])
+    # from tables 1+2 of Gehrels 1986
+    cl_upper = np.array([1.841, 3.300, 4.638, 5.918, 7.163, 8.382, 9.584, 10.77, 11.95, 13.11, 14.27, 15.42, 16.56, 17.70, 18.83, 19.96])
+    cl_lower = np.array([0.0, 0.173, 0.708, 1.367, 2.086, 2.840, 3.620, 4.419, 5.232, 6.057, 6.891, 7.734, 8.585, 9.441, 10.30, 11.17])
+    if (n <= 15):
+        hit = (n_values == n)
+        # frac_err i..e dN/N
+        frac_err_upper = (cl_upper[hit] - n) / (n + 1e-5)
+        frac_err_lower = (n - cl_lower[hit]) / (n + 1e-5)
+    if(n > 15):
+        # this is good for the lower limit but somewhat underestimates the upper limit (but not too significant at these n)
+        frac_err_upper = np.sqrt(n) / n
+        frac_err_lower = np.sqrt(n) / n
+
+    # print(n, frac_err_lower, frac_err_upper)
+    return [frac_err_lower, frac_err_upper]
+
+
+def poisson_errors(l, z, l_bins, z_bins):
+    """Compute the poisson errors for the binned data."""
+    upper_error = np.zeros((len(z_bins), len(l_bins)))
+    lower_error = np.zeros((len(z_bins), len(l_bins)))
+
+    counts, *_ = np.histogram2d(z, l, bins=[z_bins, l_bins])
+
+    for i in range(len(z_bins) - 1):
+        for j in range(len(l_bins) - 1):
+            lower_error[i, j], upper_error[i, j] = fracerr_poisson(counts[i, j])
+
+    return [lower_error, upper_error]

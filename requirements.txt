@@ -22,7 +22,7 @@ numpy==1.19.5
     #   pyerfa
     #   scikit-learn
     #   scipy
-pillow==8.1.0
+pillow==8.2.0
     # via matplotlib
 pyerfa==1.7.1.1
     # via astropy

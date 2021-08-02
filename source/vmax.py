@@ -10,6 +10,7 @@ import astropy.table as table
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
 from astropy.io import fits
 from astropy import cosmology, constants
 from astropy import units as u
@@ -189,14 +190,19 @@ def coverage_correction(full_fluxes, selected_fluxes):
     from astropy.stats import histogram
     from scipy.interpolate import interp1d
 
-    full_binned, bin_vals = histogram(full_fluxes, bins='blocks')
-    selected_binned, bin_edges = histogram(selected_fluxes, bins=bin_vals)
+    # full_binned, bin_vals = histogram(full_fluxes, bins='blocks')
+    # selected_binned, bin_edges = histogram(selected_fluxes, bins=bin_vals)
+
+    bins = np.logspace(np.log10(full_fluxes.min())*0.99999999, np.log10(full_fluxes.max())*1.00000001, num=20)
+    full_binned, bin_vals = np.histogram(full_fluxes, bins=bins)
+    selected_binned, bin_edges = histogram(selected_fluxes, bins=bins)
 
     if np.any(selected_binned) == 0:
         print(np.sum(selected_binned == 0), 'zeros in coverage correction')
 
     corrections = selected_binned / full_binned
     bin_centers = (bin_vals[1:] + bin_vals[:-1]) / 2
+    # print('corrections', corrections)
 
     return interp1d(bin_centers, corrections, fill_value=1, bounds_error=False, kind='nearest')
 
@@ -231,7 +237,7 @@ def coverage_function(data, wcs, xlength, ylength, detector_area, photon_energy,
     return cov_func
 
 
-def plot_lf_vmax(lf_values, lf_errors, redshift_bins, lum_bins, this_label='This analysis', title='', lum_limits=[], compare_to_others={}, other_runs={}, outfile='./lf.png', lum_sublabel='', others_limits={}):
+def plot_lf_vmax(lf_values, lf_errors, redshift_bins, lum_bins, this_label='This analysis', title='', lum_limits=[], compare_to_others={}, other_runs={}, outfile='./lf.png', lum_sublabel='', others_limits={}, x_ray_correction={}):
     """Plot 1/V_max LF."""
     num_subplots = len(lf_values)
     ncols = np.ceil(np.sqrt(num_subplots))
@@ -271,12 +277,14 @@ def plot_lf_vmax(lf_values, lf_errors, redshift_bins, lum_bins, this_label='This
         axflat[i].legend(handles=handles[0], labels=labels, loc='upper right', handlelength=0, handletextpad=0, markerscale=0, fontsize='x-large', frameon=False)
 
     ax = fig.add_subplot(111, frameon=False)
-    ax.set_xlabel(rf'$\log$($L{lum_sublabel}$ / erg s$^{{-1}}$)', labelpad=20, fontsize=20)
-    ax.set_ylabel(rf'd$\Phi$/d$\log$ $L{lum_sublabel}$ [Mpc$^{{-3}}$]', labelpad=35, fontsize=20)
+    ax.set_xlabel(rf'$\log_{{10}}$($L{lum_sublabel}$ / erg s$^{{-1}}$)', labelpad=20, fontsize=20)
+    ax.set_ylabel(rf'd$\Phi$/d$\log_{{10}}$ $L{lum_sublabel}$ [Mpc$^{{-3}}$]', labelpad=35, fontsize=20)
     ax.tick_params(axis='both', which='both', bottom=False, top=False, left=False, right=False, labelbottom=False, labeltop=False, labelleft=False, labelright=False)
 
     colors = (color for color in ['xkcd:petrol', 'xkcd:royal', 'xkcd:red wine', 'xkcd:lilac', 'xkcd:cerulean', 'xkcd:aquamarine', 'xkcd:wine', 'xkcd:coral', 'xkcd:seafoam green'])
     offset = (off for off in [1.05, 0.95, 1.1, 0.9, 1.25, 0.975])
+    hatches = (h for h in ['///', '\\\\\\'])
+    hatches = (h for h in ['|||', '---'])
 
     for other in other_runs:
         lf_values = other_runs[other][0]
@@ -290,15 +298,16 @@ def plot_lf_vmax(lf_values, lf_errors, redshift_bins, lum_bins, this_label='This
                 # axflat[i].axvline(lum_limits[i], color='xkcd:pale peach', lw=2)
                 lum_lim_index = np.argmax(lum_limits[i] < bin_centers)
 
-            axflat[i].errorbar(bin_centers[lum_lim_index:] * offs, np.log(10) * bin_centers[lum_lim_index:] * lf_vals[lum_lim_index:], xerr=lum_errors[lum_lim_index:], yerr=bin_centers[lum_lim_index:]*lf_errors[i][:, lum_lim_index:]*np.log(10), label=other, ls='', marker='p', color=color, capsize=3, markersize=8)
+            axflat[i].errorbar(bin_centers[lum_lim_index:] * offs, np.log(10) * bin_centers[lum_lim_index:] * lf_vals[lum_lim_index:], xerr=lum_errors[lum_lim_index:], yerr=bin_centers[lum_lim_index:]*lf_errors[i][:, lum_lim_index:]*np.log(10), label=other, ls='', marker='p', color=color, capsize=3, markersize=8, markerfacecolor='xkcd:white')
 
-        vmax_legend.append(Line2D([0], [0], marker='p', color=color, ls='', markersize=8, label=other))
+        vmax_legend.append(Line2D([0], [0], marker='p', color=color, ls='', markersize=8, label=other, markerfacecolor='xkcd:white'))
 
-    colors = (color for color in ['xkcd:bland', 'xkcd:dusty lavender', 'xkcd:grey/green', 'xkcd:putty'])
+    colors = (color for color in ['xkcd:silver', 'xkcd:dusty lavender'])
     if len(compare_to_others) > 0:
         vmax_legend.append(Line2D([0], [0], marker='o', color='xkcd:orangered', ls='', markersize=10, label=this_label))
         for author in compare_to_others:
             color = next(colors)
+            hatch = next(hatches)
             try:
                 lims = others_limits[author]
             except KeyError:
@@ -312,14 +321,16 @@ def plot_lf_vmax(lf_values, lf_errors, redshift_bins, lum_bins, this_label='This
                 marker = 'o'
                 ls = ''
                 alpha = 1
-            lit_legend.append(Line2D([0], [0], marker=marker, color=color, lw=3, markersize=10, label=author, ls=ls))
+            # lit_legend.append(Line2D([0], [0], marker=marker, color=color, lw=3, markersize=10, label=author, ls=ls))
+            lit_legend.append(Patch(edgecolor=color, facecolor='none', hatch=hatch, label=author))
             offs = next(offset)
             for i, vals in enumerate(compare_to_others[author]):
                 if len(vals) == 3:
                     upper_index = None
                     lower_index = None
-                    axflat[i].plot(vals[0][lower_index:upper_index, 0], vals[0][lower_index:upper_index, 1], ls='--', marker=marker, color=color, alpha=0.3)
-                    axflat[i].fill_between(vals[1][lower_index:upper_index, 0], vals[1][lower_index:upper_index, 1], vals[2][lower_index:upper_index, 1], ls='--', color=color, alpha=0.10)
+                    # axflat[i].plot(vals[0][lower_index:upper_index, 0], vals[0][lower_index:upper_index, 1], ls='--', marker=marker, color=color, alpha=0.3)
+                    axflat[i].fill_between(vals[1][lower_index:upper_index, 0], vals[1][lower_index:upper_index, 1], vals[2][lower_index:upper_index, 1], ls='--', facecolor='none', edgecolor=utils.lighten_color(color, amount=0.3), alpha=0.1, hatch=hatch)
+                    # axflat[i].fill_between(vals[1][lower_index:upper_index, 0], vals[1][lower_index:upper_index, 1], vals[2][lower_index:upper_index, 1], ls='--', facecolor='none', edgecolor=color, alpha=0.1, hatch=hatch)
                     if lims is not None:
                         lower_index = np.argmax(lims[i][0] < vals[0][:, 0]) - 1
                         upper_index = np.argmax(lims[i][1] < vals[0][:, 0])
@@ -327,8 +338,8 @@ def plot_lf_vmax(lf_values, lf_errors, redshift_bins, lum_bins, this_label='This
                         # if lower_index < 0: lower_index = 0
                         # print(lower_index)
                         # print(lims[i][0], lower_index, upper_index, vals[0][:, 0])
-                        axflat[i].plot(vals[0][lower_index:upper_index, 0], vals[0][lower_index:upper_index, 1], ls=ls, marker=marker, color=color, alpha=0.5)
-                        axflat[i].fill_between(vals[1][lower_index:upper_index, 0], vals[1][lower_index:upper_index, 1], vals[2][lower_index:upper_index, 1], ls=ls, color=color, alpha=0.3)
+                        # axflat[i].plot(vals[0][lower_index:upper_index, 0], vals[0][lower_index:upper_index, 1], ls=ls, marker=marker, color=color, alpha=0.5)
+                        axflat[i].fill_between(vals[1][lower_index:upper_index, 0], vals[1][lower_index:upper_index, 1], vals[2][lower_index:upper_index, 1], ls=ls, facecolor='none', edgecolor=color, alpha=0.4, hatch=hatch)
                 else:
                     axflat[i].plot(vals[:, 0] + offs, vals[:, 1], ls=ls, marker=marker, color=color)
         # ax.legend(handles=big_legend, bbox_to_anchor=(1.01, 0.5), loc='center left')
@@ -355,7 +366,7 @@ def l_z_histo(l, z, l_bins, z_bins, band='band', unit=''):
     fig.colorbar(im)
     # ax.set_title(rf'Histogram of luminosity \& redshift for {len(l)} {band} sources')
 
-    return fig, ax
+    return fig, ax, histo
 
 
 def incompleteness_histo(full_sample_fluxes, agn_fluxes, flux_bins):
@@ -443,12 +454,15 @@ def fracerr_poisson(n):
     # from tables 1+2 of Gehrels 1986
     cl_upper = np.array([1.841, 3.300, 4.638, 5.918, 7.163, 8.382, 9.584, 10.77, 11.95, 13.11, 14.27, 15.42, 16.56, 17.70, 18.83, 19.96])
     cl_lower = np.array([0.0, 0.173, 0.708, 1.367, 2.086, 2.840, 3.620, 4.419, 5.232, 6.057, 6.891, 7.734, 8.585, 9.441, 10.30, 11.17])
-    if (n <= 15):
+    if n == 0:
+        frac_err_upper = 0
+        frac_err_lower = 0
+    elif (n <= 15):
         hit = (n_values == n)
         # frac_err i..e dN/N
-        frac_err_upper = (cl_upper[hit] - n) / (n + 1e-5)
-        frac_err_lower = (n - cl_lower[hit]) / (n + 1e-5)
-    if(n > 15):
+        frac_err_upper = (cl_upper[hit] - n) / n
+        frac_err_lower = (n - cl_lower[hit]) / n
+    else:
         # this is good for the lower limit but somewhat underestimates the upper limit (but not too significant at these n)
         frac_err_upper = np.sqrt(n) / n
         frac_err_lower = np.sqrt(n) / n

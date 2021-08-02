@@ -89,13 +89,48 @@ def compute_z_from_mag(mag_abs, mag_app, z_guess, cosmo):
     return z_newton
 
 
-def double_power_law(L, A, Lstar, gamma1, gamma2, z=[], L_multiplier=1, evolution_multiplier=1):
+def double_power_law(L, A, Lstar, gamma1, gamma2, L_multiplier=1, evolution_multiplier=1, z=[]):
     """Compute value of broken double power law.
 
     Can give a muliplier on L and on the whole function to test different evolution models.
     """
 
     return A / (((L * L_multiplier) / Lstar)**gamma1 + ((L * L_multiplier) / Lstar)**gamma2) * evolution_multiplier
+
+
+def dpl_fit(lfvals, lferrvals, l_bins, beta0s, ifixb=[1, 1, 1, 1]):
+    """Fit double power law to binned LF estimate."""
+    from scipy import odr
+
+    # if len(lfvals.shape) == 1:
+    #     lfvals = [lfvals]
+    #     lferrvals = [lferrvals]
+
+    def dpl_func(params, L):
+        A, gamma1, gamma2, Lstar = np.array(params).astype(np.float64).astype(complex)
+        # if A > -4.0:
+        #     return 1e90
+        # if Lstar > 46.5:
+        #     return 1e90
+        return (10**A / ((L / 10**Lstar)**gamma1 + (L / 10**Lstar)**gamma2)).real
+
+    lum_errors = (l_bins[1:] - l_bins[:-1]) / 2
+    bin_centers = (l_bins[:-1] + l_bins[1:]) / 2
+
+    dpl_fits = []
+    for lf, lferr, beta0 in zip(lfvals, lferrvals, beta0s):
+        dpl = odr.Model(dpl_func)
+        lferr[lferr == 0.0] = np.nan
+        mydata = odr.RealData(bin_centers, lf * bin_centers * np.log(10), sx=lum_errors, sy=lferr * np.log(10) * bin_centers)
+        myodr = odr.ODR(mydata, dpl, beta0=beta0, ifixb=ifixb, maxit=300, stpb=[0.1, 0.1, 0.1, 1])
+        # myodr = odr.ODR(mydata, dpl, beta0=[np.log10(1e-4), 0.3, 2.8, np.log10(4e44)], ifixb=[1, 0, 0, 1], maxit=300)
+        # myodr = odr.ODR(mydata, dpl, beta0=[4e-5, 0.4, 3.3, 6e44])
+        myoutput = myodr.run()
+        # print('param for this z bin', myoutput.beta)
+
+        dpl_fits.append(lambda L, paramss=myoutput.beta: dpl_func(paramss, L))
+
+    return dpl_fits
 
 
 def LDDE(L, z, *, A, gamma1, gamma2, Lstar, zcstar, p1, p2, alpha, La):
@@ -160,4 +195,4 @@ def IR_evol(L, z, *, A, gamma1, gamma2, zref, Lstar, k1, k2, k3, limits=None):
                 lade_vals_at_z.append(np.array([L[low_index:high_index], double_power_law(L, A, Lstar, gamma1, gamma2, z=zz, L_multiplier=L_mult)][low_index:high_index]).T)
         # print(lade_vals_at_z)
 
-    return lade_vals_at_z
+    return np.array(lade_vals_at_z)

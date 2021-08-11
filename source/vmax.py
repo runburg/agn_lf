@@ -393,7 +393,7 @@ def exposure_plot(wcs, data, survey='', band='', outfile='', truncate_radec=None
 
     ax = fig.add_subplot(111, projection=wcs)
     ax.imshow(data, cmap=plt.cm.cividis)
-    ax.set_xlabel('Ra')
+    ax.set_xlabel('RA')
     ax.set_ylabel('Dec')
 
     if truncate_radec is not None:
@@ -437,7 +437,7 @@ def cov_func_plot(cov_func, min_logflux, max_logflux, truncate_radec=None, compa
         ax.plot(data[:, 0], data[:, 1], label=label, color=next(colors))
 
     # ax.set_title(f'{survey} flux coverage for {band} band')
-    ax.set_xlabel(r'Flux [photons/area/s]')
+    ax.set_xlabel(r'Flux [erg cm$^{-2}$ s$^{-1}$]')
     ax.set_ylabel(r'Coverage [deg$^2$]')
     
     if len(outfile) < 1:

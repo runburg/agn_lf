@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!n/usr/bin/env python3
 """
 File: vmax.py
 Author: Jack Runburg
@@ -237,7 +237,7 @@ def coverage_function(data, wcs, xlength, ylength, detector_area, photon_energy,
     return cov_func
 
 
-def plot_lf_vmax(lf_values, lf_errors, redshift_bins, lum_bins, this_label='This analysis', title='', lum_limits=[], compare_to_others={}, other_runs={}, outfile='./lf.png', lum_sublabel='', others_limits={}, x_ray_correction={}):
+def plot_lf_vmax(lf_values, lf_errors, redshift_bins, lum_bins, this_label='This analysis', title=None, lum_limits=[], compare_to_others={}, other_runs={}, outfile='./lf.png', lum_sublabel='', others_limits={}, x_ray_correction={}):
     """Plot 1/V_max LF."""
     num_subplots = len(lf_values)
     ncols = np.ceil(np.sqrt(num_subplots))
@@ -347,7 +347,8 @@ def plot_lf_vmax(lf_values, lf_errors, redshift_bins, lum_bins, this_label='This
     ax.add_artist(lil_legend)
     ax.legend(handles=lit_legend, loc='lower left', bbox_to_anchor=(0.67, 0))
 
-    fig.suptitle(title, fontsize=24, y=0.93)
+    if title is not None:
+        fig.suptitle(title, fontsize=24, y=0.93)
 
     fig.savefig(outfile)
 
@@ -437,7 +438,7 @@ def cov_func_plot(cov_func, min_logflux, max_logflux, truncate_radec=None, compa
         ax.plot(data[:, 0], data[:, 1], label=label, color=next(colors))
 
     # ax.set_title(f'{survey} flux coverage for {band} band')
-    ax.set_xlabel(r'Flux [erg cm$^{-2}$ s$^{-1}$]')
+    ax.set_xlabel(r'$0.2$-$10$ keV flux [erg cm$^{-2}$ s$^{-1}$]')
     ax.set_ylabel(r'Coverage [deg$^2$]')
     
     if len(outfile) < 1:
